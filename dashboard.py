@@ -80,67 +80,55 @@ crypto = {
 prev_close_cache = {}
 
 async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -> Tuple[float, float]:
-    """단일 자산 데이터를 가져오는 비동기 함수 (타임아웃 및 재시도 추가)"""
     for attempt in range(retries):
         try:
             async def fetch_data():
                 ticker_data = yf.Ticker(ticker)
                 history = ticker_data.history(period="1d")
-                
-                # 캐시에 데이터가 없거나 오래된 경우 새로 저장
                 if ticker not in prev_close_cache or "value" not in prev_close_cache[ticker]:
                     prev_close_cache[ticker] = {
                         "value": ticker_data.info.get("previousClose", None),
-                        "timestamp": pd.Timestamp.now()  # 현재 시각 저장
+                        "timestamp": pd.Timestamp.now()
                     }
 
-                # 캐시에서 값 가져오기
-                prev_close = prev_close_cache[ticker].get("value")
-                
-                # 가격 데이터 처리
-                if not history.empty and prev_close is not None:
+                prev_close = prev_close_cache[ticker]["value"]
+                if not history.empty:
                     current_price = history["Close"].iloc[-1]
-                    
-                    # 수정된 등락률 계산
-                    if current_price == prev_close:
-                        change_percent = 0.0  # 변동이 없는 경우
-                    else:
-                        change_percent = round(((current_price - prev_close) / prev_close) * 100, 2)
-                    
+                    change_percent = (
+                        round(((current_price - prev_close) / prev_close) * 100, 2)
+                        if prev_close
+                        else None
+                    )
+                    print(f"[DEBUG] Ticker: {ticker}, Current Price: {current_price}, Change: {change_percent}")
                     return current_price, change_percent
                 else:
-                    print(f"{ticker}: 데이터가 비어 있거나 이전 종가가 없습니다.")
+                    print(f"[DEBUG] Ticker: {ticker} - No historical data available.")
                     return None, None
 
-            # 타임아웃 처리
             return await asyncio.wait_for(fetch_data(), timeout=timeout)
-        
         except asyncio.TimeoutError:
-            print(f"Timeout fetching data for {ticker} (Attempt {attempt + 1}/{retries})")
+            print(f"[ERROR] Timeout fetching data for {ticker} (Attempt {attempt + 1}/{retries})")
         except Exception as e:
-            print(f"Error fetching data for {ticker}: {e} (Attempt {attempt + 1}/{retries})")
-        
-        # 지수적 백오프 대기
+            print(f"[ERROR] Error fetching data for {ticker}: {e} (Attempt {attempt + 1}/{retries})")
+
         await asyncio.sleep(2 ** attempt)
 
-    # 모든 재시도 실패 시 None 반환
+    print(f"[ERROR] All retries failed for {ticker}")
     return None, None
 
 async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[Tuple[float, float]]:
-    """여러 자산 데이터를 비동기로 가져오는 함수 (배치 처리 및 재시도 추가)"""
     tickers = list(assets.values())
     results = []
 
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         tasks = [fetch_single_price(ticker) for ticker in batch]
-        try:
-            batch_results = await asyncio.gather(*tasks)
-            results.extend(batch_results)
-        except Exception as e:
-            print(f"Error fetching batch {batch}: {e}")
-    
+        batch_results = await asyncio.gather(*tasks)
+        results.extend(batch_results)
+        print(f"[DEBUG] Batch results: {batch_results}")
+
     return results
+
 
 def clear_old_cache(max_age: int = 600):
     """오래된 캐시 데이터를 제거"""
