@@ -4,6 +4,7 @@ import pandas as pd
 import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import Dict, Tuple, List
 
 # 페이지 제목
 st.title("\U0001F4CA 글로벌 금융 대시보드")
@@ -78,29 +79,45 @@ crypto = {
 # 전일 종가 캐싱
 prev_close_cache = {}
 
-async def fetch_single_price(ticker):
-    """단일 자산 데이터를 가져오는 비동기 함수"""
+async def fetch_single_price(ticker: str, timeout: int = 10) -> Tuple[float, float]:
+    """단일 자산 데이터를 가져오는 비동기 함수 (타임아웃 추가)"""
     try:
-        ticker_data = yf.Ticker(ticker)
-        history = ticker_data.history(period="1d")
-        if ticker not in prev_close_cache:
-            prev_close_cache[ticker] = ticker_data.info.get("previousClose", None)
-        prev_close = prev_close_cache[ticker]
-        if not history.empty:
-            current_price = history["Close"].iloc[-1]  # 소수점 유지
-            if prev_close:
-                change_percent = round(((current_price - prev_close) / prev_close) * 100, 2)
+        async def fetch_data():
+            ticker_data = yf.Ticker(ticker)
+            history = ticker_data.history(period="1d")
+            if ticker not in prev_close_cache:
+                prev_close_cache[ticker] = ticker_data.info.get("previousClose", None)
+            prev_close = prev_close_cache[ticker]
+            if not history.empty:
+                current_price = history["Close"].iloc[-1]
+                change_percent = (
+                    round(((current_price - prev_close) / prev_close) * 100, 2)
+                    if prev_close
+                    else None
+                )
+                return current_price, change_percent
             else:
-                change_percent = None
-            return current_price, change_percent
-    except Exception:
-        pass
+                return None, None
+
+        # 타임아웃 설정
+        return await asyncio.wait_for(fetch_data(), timeout=timeout)
+    except asyncio.TimeoutError:
+        print(f"Timeout fetching data for {ticker}")
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
     return None, None
 
-async def fetch_all_prices(assets):
-    """여러 자산 데이터를 비동기로 가져오는 함수"""
-    tasks = [fetch_single_price(ticker) for ticker in assets.values()]
-    return await asyncio.gather(*tasks)
+async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[Tuple[float, float]]:
+    """여러 자산 데이터를 비동기로 가져오는 함수 (배치 처리 추가)"""
+    tickers = list(assets.values())
+    results = []
+
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        tasks = [fetch_single_price(ticker) for ticker in batch]
+        results.extend(await asyncio.gather(*tasks))
+    
+    return results
 
 def create_dataframe(data, asset_names):
     """데이터를 DataFrame 형태로 변환"""
