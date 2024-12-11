@@ -46,11 +46,11 @@ indices_futures = {
 
 # 3. 주요 환율 데이터 (USD 기준)
 forex_pairs = {
-    "USD/유로": "EURUSD=X",
-    "USD/엔": "JPY=X",
-    "USD/파운드": "GBPUSD=X",
-    "USD/위안": "CNY=X",
-    "USD/원": "KRW=X"
+    "달러/유로": "EURUSD=X",
+    "달러/엔": "JPY=X",
+    "달러/파운드": "GBPUSD=X",
+    "달러/위안": "CNY=X",
+    "달러/원": "KRW=X"
 }
 
 # 4. 미국 국채 데이터
