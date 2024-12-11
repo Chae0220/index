@@ -149,27 +149,52 @@ def clear_old_cache(max_age: int = 600):
 
 def create_dataframe(data, asset_names):
     """데이터를 DataFrame 형태로 변환"""
-    formatted_data = [
-        {
-            "자산": name,
-            "현재 가격 (USD)": f"<span style='color:red; text-align:right; padding-right:10px;'>{price:.2f}</span>" if change and change > 0 else f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{price:.2f}</span>" if change and change < 0 else f"<span style='text-align:right; padding-right:10px;'>{price:.2f}</span>" if price is not None else "데이터 없음",
-            "등락률 (%)": f"<span style='color:red; text-align:right; padding-right:10px;'>{change:.2f}%</span>" if change and change > 0 else f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{change:.2f}%</span>" if change and change < 0 else "데이터 없음",
-        }
-        for name, (price, change) in zip(asset_names, data)
-    ]
+    formatted_data = []
+    for name, (price, change) in zip(asset_names, data):
+        if price is None:
+            formatted_data.append({
+                "자산": name,
+                "현재 가격 (USD)": "데이터 없음",
+                "등락률 (%)": "데이터 없음"
+            })
+        else:
+            formatted_data.append({
+                "자산": name,
+                "현재 가격 (USD)": f"<span style='text-align:right; padding-right:10px;'>{price:.2f}</span>",
+                "등락률 (%)": (
+                    f"<span style='color:red; text-align:right; padding-right:10px;'>{change:.2f}%</span>"
+                    if change and change > 0 else
+                    f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{change:.2f}%</span>"
+                    if change and change < 0 else
+                    f"<span style='text-align:right; padding-right:10px;'>0.00%</span>"
+                )
+            })
     df = pd.DataFrame(formatted_data)
     return df.to_html(escape=False, index=False, classes='styled-table')
 
+
 def create_crypto_dataframe(data, asset_names):
     """코인 데이터를 DataFrame 형태로 변환 (현재 가격은 소수점 4째 자리까지)"""
-    formatted_data = [
-        {
-            "자산": name,
-            "현재 가격 (USD)": f"<span style='color:red; text-align:right; padding-right:10px;'>{price:.4f}</span>" if change and change > 0 else f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{price:.4f}</span>" if change and change < 0 else f"<span style='text-align:right; padding-right:10px;'>{price:.4f}</span>" if price is not None else "데이터 없음",
-            "등락률 (%)": f"<span style='color:red; text-align:right; padding-right:10px;'>{change:.2f}%</span>" if change and change > 0 else f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{change:.2f}%</span>" if change and change < 0 else "데이터 없음",
-        }
-        for name, (price, change) in zip(asset_names, data)
-    ]
+    formatted_data = []
+    for name, (price, change) in zip(asset_names, data):
+        if price is None:
+            formatted_data.append({
+                "자산": name,
+                "현재 가격 (USD)": "데이터 없음",
+                "등락률 (%)": "데이터 없음"
+            })
+        else:
+            formatted_data.append({
+                "자산": name,
+                "현재 가격 (USD)": f"<span style='text-align:right; padding-right:10px;'>{price:.4f}</span>",
+                "등락률 (%)": (
+                    f"<span style='color:red; text-align:right; padding-right:10px;'>{change:.2f}%</span>"
+                    if change and change > 0 else
+                    f"<span style='color:#4682B4; text-align:right; padding-right:10px;'>{change:.2f}%</span>"
+                    if change and change < 0 else
+                    f"<span style='text-align:right; padding-right:10px;'>0.00%</span>"
+                )
+            })
     df = pd.DataFrame(formatted_data)
     return df.to_html(escape=False, index=False, classes='styled-table')
 
