@@ -79,45 +79,61 @@ crypto = {
 # 전일 종가 캐싱
 prev_close_cache = {}
 
-async def fetch_single_price(ticker: str, timeout: int = 10) -> Tuple[float, float]:
-    """단일 자산 데이터를 가져오는 비동기 함수 (타임아웃 추가)"""
-    try:
-        async def fetch_data():
-            ticker_data = yf.Ticker(ticker)
-            history = ticker_data.history(period="1d")
-            if ticker not in prev_close_cache:
-                prev_close_cache[ticker] = ticker_data.info.get("previousClose", None)
-            prev_close = prev_close_cache[ticker]
-            if not history.empty:
-                current_price = history["Close"].iloc[-1]
-                change_percent = (
-                    round(((current_price - prev_close) / prev_close) * 100, 2)
-                    if prev_close
-                    else None
-                )
-                return current_price, change_percent
-            else:
-                return None, None
+async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -> Tuple[float, float]:
+    """단일 자산 데이터를 가져오는 비동기 함수 (타임아웃 및 재시도 추가)"""
+    for attempt in range(retries):
+        try:
+            async def fetch_data():
+                ticker_data = yf.Ticker(ticker)
+                history = ticker_data.history(period="1d")
+                if ticker not in prev_close_cache:
+                    prev_close_cache[ticker] = ticker_data.info.get("previousClose", None)
+                prev_close = prev_close_cache[ticker]
+                if not history.empty:
+                    current_price = history["Close"].iloc[-1]
+                    change_percent = (
+                        round(((current_price - prev_close) / prev_close) * 100, 2)
+                        if prev_close
+                        else None
+                    )
+                    return current_price, change_percent
+                else:
+                    return None, None
 
-        # 타임아웃 설정
-        return await asyncio.wait_for(fetch_data(), timeout=timeout)
-    except asyncio.TimeoutError:
-        print(f"Timeout fetching data for {ticker}")
-    except Exception as e:
-        print(f"Error fetching data for {ticker}: {e}")
-    return None, None
+            # 타임아웃 설정
+            return await asyncio.wait_for(fetch_data(), timeout=timeout)
+        except asyncio.TimeoutError:
+            print(f"Timeout fetching data for {ticker} (Attempt {attempt + 1}/{retries})")
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e} (Attempt {attempt + 1}/{retries})")
+        await asyncio.sleep(2 ** attempt)  # 지수적 백오프
+    return None, None  # 모든 재시도 실패 시 None 반환
 
 async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[Tuple[float, float]]:
-    """여러 자산 데이터를 비동기로 가져오는 함수 (배치 처리 추가)"""
+    """여러 자산 데이터를 비동기로 가져오는 함수 (배치 처리 및 재시도 추가)"""
     tickers = list(assets.values())
     results = []
 
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         tasks = [fetch_single_price(ticker) for ticker in batch]
-        results.extend(await asyncio.gather(*tasks))
+        try:
+            batch_results = await asyncio.gather(*tasks)
+            results.extend(batch_results)
+        except Exception as e:
+            print(f"Error fetching batch {batch}: {e}")
     
     return results
+
+def clear_old_cache(max_age: int = 3600):
+    """오래된 캐시를 초기화하는 함수"""
+    current_time = pd.Timestamp.now().timestamp()
+    keys_to_delete = [
+        key for key, value in prev_close_cache.items()
+        if value and (current_time - value.get("timestamp", current_time)) > max_age
+    ]
+    for key in keys_to_delete:
+        del prev_close_cache[key]
 
 def create_dataframe(data, asset_names):
     """데이터를 DataFrame 형태로 변환"""
@@ -227,6 +243,7 @@ async def update_dashboard():
     """데이터를 주기적으로 업데이트하는 함수"""
     while True:
         # 데이터 갱신
+        clear_old_cache(max_age=600)  # 10분마다 오래된 캐시 초기화
         commodity_prices = await fetch_all_prices(commodities)
         indices_spot_prices = await fetch_all_prices(indices_spot)
         indices_futures_prices = await fetch_all_prices(indices_futures)
