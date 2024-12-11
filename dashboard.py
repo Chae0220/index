@@ -130,7 +130,7 @@ async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[
     return results
 
 
-def clear_old_cache(max_age: int = 600):
+def clear_old_cache(max_age: int = 300):
     """오래된 캐시 데이터를 제거"""
     current_time = pd.Timestamp.now()
     keys_to_delete = [
@@ -274,7 +274,7 @@ async def update_dashboard():
     """데이터를 주기적으로 업데이트하는 함수"""
     while True:
         # 데이터 갱신
-        clear_old_cache(max_age=600)  # 10분마다 오래된 캐시 초기화
+        clear_old_cache(max_age=300)  # 10분마다 오래된 캐시 초기화
         commodity_prices = await fetch_all_prices(commodities)
         indices_spot_prices = await fetch_all_prices(indices_spot)
         indices_futures_prices = await fetch_all_prices(indices_futures)
