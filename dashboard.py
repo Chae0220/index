@@ -2,7 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import asyncio
-import pytz
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # 페이지 제목
 st.title("\U0001F4CA 글로벌 금융 대시보드")
@@ -236,11 +237,10 @@ async def update_dashboard():
             create_crypto_dataframe(crypto_prices, crypto.keys()), unsafe_allow_html=True
         )
 
-        # 갱신 시간 표시
         # 한국 시간으로 갱신 시간 표시
-        kst = pytz.timezone("Asia/Seoul")  # 한국 시간대 설정
-        current_time_kst = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
+        current_time_kst = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
         placeholders["update_time"].markdown(f"**데이터 갱신 시각:** {current_time_kst}")
+
 
         # 5초 간격 갱신
         await asyncio.sleep(5)
