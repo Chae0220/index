@@ -243,7 +243,7 @@ async def update_dashboard():
 
 
         # 5초 간격 갱신
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
 
 # Streamlit에서 비동기 루프 실행
 def main():
