@@ -86,9 +86,16 @@ async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -
             async def fetch_data():
                 ticker_data = yf.Ticker(ticker)
                 history = ticker_data.history(period="1d")
-                if ticker not in prev_close_cache:
-                    prev_close_cache[ticker] = ticker_data.info.get("previousClose", None)
-                prev_close = prev_close_cache[ticker]
+                
+                # 캐시에 데이터가 없거나 오래된 경우 새로 저장
+                if ticker not in prev_close_cache or "value" not in prev_close_cache[ticker]:
+                    prev_close_cache[ticker] = {
+                        "value": ticker_data.info.get("previousClose", None),
+                        "timestamp": pd.Timestamp.now()  # 현재 시각 저장
+                    }
+
+                # 캐시에서 값 가져오기
+                prev_close = prev_close_cache[ticker]["value"]
                 if not history.empty:
                     current_price = history["Close"].iloc[-1]
                     change_percent = (
@@ -100,14 +107,19 @@ async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -
                 else:
                     return None, None
 
-            # 타임아웃 설정
+            # 타임아웃 처리
             return await asyncio.wait_for(fetch_data(), timeout=timeout)
+        
         except asyncio.TimeoutError:
             print(f"Timeout fetching data for {ticker} (Attempt {attempt + 1}/{retries})")
         except Exception as e:
             print(f"Error fetching data for {ticker}: {e} (Attempt {attempt + 1}/{retries})")
-        await asyncio.sleep(2 ** attempt)  # 지수적 백오프
-    return None, None  # 모든 재시도 실패 시 None 반환
+        
+        # 지수적 백오프 대기
+        await asyncio.sleep(2 ** attempt)
+
+    # 모든 재시도 실패 시 None 반환
+    return None, None
 
 async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[Tuple[float, float]]:
     """여러 자산 데이터를 비동기로 가져오는 함수 (배치 처리 및 재시도 추가)"""
@@ -125,12 +137,13 @@ async def fetch_all_prices(assets: Dict[str, str], batch_size: int = 5) -> List[
     
     return results
 
-def clear_old_cache(max_age: int = 3600):
-    """오래된 캐시를 초기화하는 함수"""
-    current_time = pd.Timestamp.now().timestamp()
+def clear_old_cache(max_age: int = 600):
+    """오래된 캐시 데이터를 제거"""
+    current_time = pd.Timestamp.now()
     keys_to_delete = [
-        key for key, value in prev_close_cache.items()
-        if value and (current_time - value.get("timestamp", current_time)) > max_age
+        key
+        for key, value in prev_close_cache.items()
+        if value and (current_time - value["timestamp"]).total_seconds() > max_age
     ]
     for key in keys_to_delete:
         del prev_close_cache[key]
