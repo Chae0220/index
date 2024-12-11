@@ -87,7 +87,7 @@ async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -
                 ticker_data = yf.Ticker(ticker)
                 history = ticker_data.history(period="1d")
                 
-                # 캐시에 데이터가 없거나 오래된 경우 새로 저장
+                # 캐시에 데이터가 없거나 "value" 키가 없는 경우 저장
                 if ticker not in prev_close_cache or "value" not in prev_close_cache[ticker]:
                     prev_close_cache[ticker] = {
                         "value": ticker_data.info.get("previousClose", None),
@@ -95,16 +95,15 @@ async def fetch_single_price(ticker: str, timeout: int = 20, retries: int = 3) -
                     }
 
                 # 캐시에서 값 가져오기
-                prev_close = prev_close_cache[ticker]["value"]
-                if not history.empty:
+                prev_close = prev_close_cache[ticker].get("value")
+                
+                # 가격 데이터 처리
+                if not history.empty and prev_close is not None:
                     current_price = history["Close"].iloc[-1]
-                    change_percent = (
-                        round(((current_price - prev_close) / prev_close) * 100, 2)
-                        if prev_close
-                        else None
-                    )
+                    change_percent = round(((current_price - prev_close) / prev_close) * 100, 2)
                     return current_price, change_percent
                 else:
+                    print(f"{ticker}: 데이터가 비어 있거나 이전 종가가 없습니다.")
                     return None, None
 
             # 타임아웃 처리
